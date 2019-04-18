@@ -1,0 +1,20 @@
+#messageContainer{
+    margin-top:36px;
+    position:absolute;
+}
+
+.add-entity-button {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+}
+
+.buttonSearch {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.buttonGraph {
+  background-color: #008CBA;
+  color: white;
+}
