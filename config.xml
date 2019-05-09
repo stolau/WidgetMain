@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <widget xmlns="http://wirecloud.conwet.fi.upm.es/ns/macdescription/1" vendor="aui"
-        name="BROWSERMAIN" version="0.1.1">
+        name="BROWSERMAIN" version="0.1.4">
     <details>
         <title>BROWSERMAIN</title>
         <email>auistola@student.oulu.fi</email>
@@ -25,18 +25,23 @@
 			<option value="test1" label="dedee"/>
 			<option value="test2" label="dadaa"/>
 			</preference>
-		
+
     </preferences>
 
     <wiring>
-        <outputendpoint
-                name="selection"
-                label="Selection"
-                type="text"/>
-        <outputendpoint
-                name="JSON"
-                label="JSON"
-                type="text"/>
+        <inputendpoint
+                name="Dates"
+                label="Dates"
+                type="text" />
+        <inputendpoint
+                name="nValue"
+                label="nValue"
+                type="text"
+                friendcode="Input" />
+        <inputendpoint
+                name="Minutes"
+                label="Minutes"
+                type="text" />
         <outputendpoint
                 name="Graph"
                 label="Graph"
