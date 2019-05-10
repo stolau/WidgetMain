@@ -234,6 +234,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			var headers = await getHeader(servicePath, service);
 			var response = await browser(url, headers);
 			var btnList = [];
+			console.log(response);
 			for(var i = 0; i < response.length; i ++)
 			{
 				if(response[i]["type"] === "Room") {
@@ -241,18 +242,25 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					var sub_servicePath = "/f/" + id.charAt(1) + "/" + id.slice(1);
 					var headers_Room = await getHeader(sub_servicePath , service);
 					var sub_response = await browser(url, headers_Room);
-					for(var c = 0; c < sub_response.length; c++)
-					{
-						// This part is meant for Talvikangas button creation. Does not work as intended
-						var keys = Object.keys(sub_response[c]);
-						for(var g = 0; g < keys.length; g++)
-						{
-							if(keys[g] !== ("TimeInstant" || "location" || "type"))
-							{
-								var newBtn = createButton(sub_response[c]["id"], sub_response[c]["type"], "buttonGraph", sub_servicePath, service);
-								btnList.push(newBtn);
+					console.log(sub_response);
+					var deviceIdList = [];
+					for(var k = 0; k < sub_response.length; k++) {
+						var keys = Object.keys(sub_response[k]);
+						/* Checks each key in subheaders and finds device ids required to make correct search
+						 for history data */
+						for(var j = 0; j < keys.length; j++) {
+							if((keys[j] != "id") && (keys[j] != "type") && (keys[j] != "TimeInstant") && (keys[j] != "location")
+								&& (keys[j] != "area") && (keys[j] != "capacity") && (keys[j] != "common_name") && (keys[j] != "Leq")
+								&& (keys[j] != "Lpeak") && (keys[j] != "relativeHumidity") && (keys[j] != "temperature")) {
+								var typeOfObject = sub_response[k][keys[j]]["metadata"]["description"]["value"];
+								deviceIdList.push([sub_response[k]["type"], sub_response[k]["id"], keys[j], typeOfObject]);
 							}
 						}
+					}
+					//console.log(deviceIdList);
+					if(deviceIdList.length > 0) {
+						var btn = createButton(id, deviceIdList, "buttonGraph_tal", sub_servicePath, "tal");
+						btnList.push(btn);
 					}
 				}
 
@@ -290,14 +298,38 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			createNewPage(btnList);
 		}
 	}
-	else if(classBtn === "buttonGraph") {
+	else if(classBtn === "buttonGraph_tal") {
 		btn.onclick = async function(){
 			if(!onOffActivate) {
+				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
 				// Pushes graph to list of graphs
 				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + "AirQualityObserved" + "/id/" + idBtn + "/attributes/tk11te22?lastN=50";
-				url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2] + "?dateFrom=2019-02-27T00:00:00Z&dateTo=2019-02-27T23:59Z&aggrMethod=max&aggrPeriod=hour";
+				var graphsList = [];
+				for( var i = 0; i < idBtn.length; i++) {
+					url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?lastN=50";
+					console.log(url);
+					var headers = await getHeader(servicePath, service);
+					console.log(headers);
+					var response = await browser(url, headers);
+					console.log(response);
+					var receivedDataList = [[], [], []];
+					var receivedData = response["contextResponses"][0]["contextElement"]["attributes"][0]["values"];
+					for(var j = 0; j < receivedData.length; j++) {
+						receivedDataList[0].push(parseFloat(receivedData[j]["attrValue"]));
+						receivedDataList[1].push(receivedData[j]["recvTime"].slice(0, 19));
+					}
+					receivedDataList[2].push(nameBtn + " " + idBtn[i][3]);
+					graphsList.push(receivedDataList);
+
+				}
+				sendGraph(graphsList, false);
+
+				// var headers = await getHeader(servicePath, service);
+				// var response = await browser(url, headers);
+				// console.log(response);
+				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2];
 				// "aggrMethod=max&aggrPeriod=hour&dateFrom=2018-10-10T00:00:00.000Z&dateTo=2018-10-10T23:59:59.999Z"
-				var headers = await getHeader(servicePath, service);
+				/*var headers = await getHeader(servicePath, service);
 				var response = await browser(url, headers);
 				var parsedData = response["contextResponses"][0]["contextElement"]["attributes"][0]["values"];
 				var data = [];
@@ -306,7 +338,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					data.push([nameBtn, parsedData[i]["attrValue"], parsedData[i]["recvTime"]]);
 				}
 				graphContainer.graphList.push(data);
-				sendGraph(graphContainer.graphList);
+				sendGraph(graphContainer.graphList);*/
 			}
 			else {
 				// Removes graph from the list
