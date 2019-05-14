@@ -347,14 +347,38 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			createNewPage(btnList);
 		}
 	}
-	else if(classBtn === "buttonGraph") {
+	else if(classBtn === "buttonGraph_tal") {
 		btn.onclick = async function(){
 			if(!onOffActivate) {
+				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
 				// Pushes graph to list of graphs
 				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + "AirQualityObserved" + "/id/" + idBtn + "/attributes/tk11te22?lastN=50";
-				url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2] + "?dateFrom=2019-02-27T00:00:00Z&dateTo=2019-02-27T23:59Z&aggrMethod=max&aggrPeriod=hour";
+				var graphsList = [];
+				for( var i = 0; i < idBtn.length; i++) {
+					url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?lastN=50";
+					console.log(url);
+					var headers = await getHeader(servicePath, service);
+					console.log(headers);
+					var response = await browser(url, headers);
+					console.log(response);
+					var receivedDataList = [[], [], []];
+					var receivedData = response["contextResponses"][0]["contextElement"]["attributes"][0]["values"];
+					for(var j = 0; j < receivedData.length; j++) {
+						receivedDataList[0].push(parseFloat(receivedData[j]["attrValue"]));
+						receivedDataList[1].push(receivedData[j]["recvTime"].slice(0, 19));
+					}
+					receivedDataList[2].push(nameBtn + " " + idBtn[i][3]);
+					graphsList.push(receivedDataList);
+
+				}
+				sendGraph(graphsList, false);
+
+				// var headers = await getHeader(servicePath, service);
+				// var response = await browser(url, headers);
+				// console.log(response);
+				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2];
 				// "aggrMethod=max&aggrPeriod=hour&dateFrom=2018-10-10T00:00:00.000Z&dateTo=2018-10-10T23:59:59.999Z"
-				var headers = await getHeader(servicePath, service);
+				/*var headers = await getHeader(servicePath, service);
 				var response = await browser(url, headers);
 				var parsedData = response["contextResponses"][0]["contextElement"]["attributes"][0]["values"];
 				var data = [];
@@ -362,9 +386,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				{
 					data.push([nameBtn, parsedData[i]["attrValue"], parsedData[i]["recvTime"]]);
 				}
-				graphContainer.graphList = [];
 				graphContainer.graphList.push(data);
-				sendGraph(graphContainer.graphList);
+				sendGraph(graphContainer.graphList);*/
 			}
 			else {
 				// Removes graph from the list
