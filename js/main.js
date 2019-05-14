@@ -624,4 +624,5 @@ function init()
 	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${minutes}`)});
 	}
 
+
 init();
