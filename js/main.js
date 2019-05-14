@@ -9,7 +9,9 @@ var theUrl = "http://pan0107.panoulu.net:8000/orion/v2/entities?limit=300&option
 var minutes = "30";
 var initDate;
 var dataCollection = [];
-var aggrMethod, aggrPeriod, inputDates, inputNValue;
+var aggrMethod, aggrPeriod;
+var inputDates = null;
+var inputNValue = null;
 
 class Graphs {
 	// Graphs is global class meant to store and remove graphs.
@@ -38,7 +40,7 @@ const graphColor = [
     "#7CFC00", "#00FFFF", "#00008B", "#FFFF00", "#008000", "#800080", "#00FF00",
     "#0000FF", "#000000", "#000080", "#7CFC00", "#E0E0E0", "#D2D2D2" ];
 
-function sendGraph(valueList, location) {
+function sendGraph(valueList, titles) {
 	// Function gets tempList and name outputs graph to Highcharts
 	// Connect Graph to Highcharts Options in wiring mode.
 
@@ -60,48 +62,18 @@ function sendGraph(valueList, location) {
 		});
 	}
 
-	if (location === "siptronix") {
-		var graphData = {
-			"title" : { "text" : "Siptronix", "x": -20 },
-			"subtitle": { "text" : "Alert date: " + initDate, "x": -20},
-			"xAxis": { "categories": valueList[0][1],
-				"plotLines": [{
-	                "color": "#FF0000",
-	                "width": 2,
-	                "value": compValueList[0].data.length / 2 - 0.5
-            	}]
-			},
-			"yAxis": { "title" : { "text": "Bulbs" },
-			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
-			"tooltip": { "valueSuffix": "" },
-			"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
-			"series":
-				compValueList,
-		}
-	} else if(location === "aqvaio") {
-		var graphData = {
-			"title" : { "text" : "Aqva.io", "x": -20 },
-			"subtitle": { "text" : "Last "+ valueList[0][1].length + " measurements", "x": -20},
-			"xAxis": { "categories": valueList[0][1] },
-			"yAxis": { "title" : { "text": "Water reading and temperature" },
-			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
-			"tooltip": { "valueSuffix": "" },
-			"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
-			"series":
-				compValueList,
-		}
-	} else {
-		var graphData = {
-			"title" : { "text" : "Siptronix", "x": -20 },
-			"subtitle": { "text" : "Last "+ valueList[0][1].length + " measurements", "x": -20},
-			"xAxis": { "categories": valueList[0][1] },
-			"yAxis": { "title" : { "text": "Temperature (°C)" },
-			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
-			"tooltip": { "valueSuffix": "" },
-			"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
-			"series":
-				compValueList,
-		}
+	var graphData = {
+		"title" : { "text" : titles[0], "x": -20 },
+		"subtitle": { "text" : titles[1], "x": -20},
+		"xAxis": { "categories": valueList[0][1],
+			"plotLines": titles[2]
+		},
+		"yAxis": { "title" : { "text": titles[3] },
+		"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
+		"tooltip": { "valueSuffix": "" },
+		"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
+		"series":
+			compValueList,
 	}
 	MashupPlatform.wiring.pushEvent("Graph", graphData);
 
@@ -277,17 +249,13 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						waterList[0].push(response[i].value.value);
 						waterList[1].push(response[i].value.metadata.timestamp.value + " - " + response[i].description.value);
 					}
-					if (response[i].type === "Device") {
-						var newBtn = createButton(response[i].id, response[i].type, "buttonGraph_aqva", "/oulu", "aqvaio");
-					} else {
-						var newBtn = createButton(response[i].id, response[i].type, "buttonGraph_aqva", "/oulu", "aqvaio");
-					}
+					var newBtn = createButton(response[i].id, response[i].type, "buttonGraph_aqva", "/oulu", "aqvaio");
 
 					btnList.push(newBtn);
 				}
 				graphContainer.graphList = [];
 				graphContainer.graphList.push(waterList, tempList);
-				sendGraph(graphContainer.graphList, "aqvaio");
+				sendGraph(graphContainer.graphList, ["Aqva.io", "Last " + waterList.length + " measurements", "", "Water reading and temperature"]);
 			} else {
 				for(var i = 0; i < response.length; i ++)
 				{
@@ -296,20 +264,27 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						var sub_servicePath = "/f/" + id.charAt(1) + "/" + id.slice(1);
 						var headers_Room = await getHeader(sub_servicePath , service);
 						var sub_response = await browser(url, headers_Room);
-						for(var c = 0; c < sub_response.length; c++)
-						{
-							// This part is meant for Talvikangas button creation. Does not work as intended
-							var keys = Object.keys(sub_response[c]);
-							for(var g = 0; g < keys.length; g++)
-							{
-								if(keys[g] !== ("TimeInstant" || "location" || "type"))
-								{
-									var newBtn = createButton(sub_response[c]["id"], sub_response[c]["type"], "buttonGraph", sub_servicePath, service);
-									btnList.push(newBtn);
+						var deviceIdList = [];
+						for(var k = 0; k < sub_response.length; k++) {
+							var keys = Object.keys(sub_response[k]);
+							/* Checks each key in subheaders and finds device ids required to make correct search
+							 for history data */
+							for(var j = 0; j < keys.length; j++) {
+								if((keys[j] != "id") && (keys[j] != "type") && (keys[j] != "TimeInstant") && (keys[j] != "location")
+									&& (keys[j] != "area") && (keys[j] != "capacity") && (keys[j] != "common_name") && (keys[j] != "Leq")
+									&& (keys[j] != "Lpeak") && (keys[j] != "relativeHumidity") && (keys[j] != "temperature")) {
+									var typeOfObject = sub_response[k][keys[j]]["metadata"]["description"]["value"];
+									deviceIdList.push([sub_response[k]["type"], sub_response[k]["id"], keys[j], typeOfObject]);
 								}
 							}
 						}
+						//console.log(deviceIdList);
+						if(deviceIdList.length > 0) {
+							var btn = createButton(id, deviceIdList, "buttonGraph_tal", sub_servicePath, "tal");
+							btnList.push(btn);
+						}
 					}
+
 
 					// Creates Initial Graph Window for data from Siptronix
 					else if(response[i]["type"] == "Alert") {
@@ -342,20 +317,32 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				bulbsList.splice(0, 1);
 				bulbsList.splice(2, 1);
 
-				sendGraph(bulbsList);
+				sendGraph(bulbsList, ["Siptronix", "Alert date: " + initDate, "", "Bulbs"]);
 			}
 			createNewPage(btnList);
 		}
 	}
 	else if(classBtn === "buttonGraph_tal") {
 		btn.onclick = async function(){
+			var aggrBool = false;
 			if(!onOffActivate) {
 				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
 				// Pushes graph to list of graphs
 				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + "AirQualityObserved" + "/id/" + idBtn + "/attributes/tk11te22?lastN=50";
 				var graphsList = [];
 				for( var i = 0; i < idBtn.length; i++) {
-					url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?lastN=50";
+					// Use lastN
+					if (inputNValue !== null) {
+						url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?lastN="+inputNValue;
+						aggrBool = false;
+					// Use timestamp
+					} else if (inputDates !== null) {
+						url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+						aggrBool = true;
+					} else {
+						url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + idBtn[i][0] + "/id/" + idBtn[i][1] + "/attributes/" + idBtn[i][2] + "?lastN=50";
+						aggrBool = false;
+					}
 					console.log(url);
 					var headers = await getHeader(servicePath, service);
 					console.log(headers);
@@ -363,15 +350,41 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					console.log(response);
 					var receivedDataList = [[], [], []];
 					var receivedData = response["contextResponses"][0]["contextElement"]["attributes"][0]["values"];
-					for(var j = 0; j < receivedData.length; j++) {
-						receivedDataList[0].push(parseFloat(receivedData[j]["attrValue"]));
-						receivedDataList[1].push(receivedData[j]["recvTime"].slice(0, 19));
+					if(aggrBool) {
+						for (var k = 0; k < receivedData.length; k++) {
+							var originDate = new Date(receivedData[k]._id.origin);
+							for (var j = 0; j < receivedData[k].points.length; j++) {
+								var formatDate = originDate;
+								receivedDataList[1].push(formatDate.toISOString().substr(0,19));
+								receivedDataList[0].push(parseFloat(parseFloat(receivedData[k].points[j][aggrMethod]).toFixed(2)));
+
+								if (aggrPeriod === "second") {
+									formatDate = originDate.setSeconds(originDate.getSeconds() + 1);
+								} else if (aggrPeriod === "minute") {
+									formatDate = originDate.setMinutes(originDate.getMinutes() + 1);
+								} else if (aggrPeriod === "hour") {
+									formatDate = originDate.setHours(originDate.getHours() + 1);
+								} else if (aggrPeriod === "day") {
+									formatDate = originDate.setDate(originDate.getDate() + 1);
+								} else if (aggrPeriod === "month") {
+									formatDate = originDate.setMonth(originDate.geMonth() + 1);
+								}
+
+							}
+						}
+					}
+					else {
+						for(var j = 0; j < receivedData.length; j++) {
+							receivedDataList[1].push(receivedData[j]["recvTime"].slice(0, 19));
+							receivedDataList[0].push(parseFloat(parseFloat(receivedData[j]["attrValue"]).toFixed(2)));
+						}
+
 					}
 					receivedDataList[2].push(nameBtn + " " + idBtn[i][3]);
 					graphsList.push(receivedDataList);
 
 				}
-				sendGraph(graphsList, false);
+				sendGraph(graphsList, ["Talvikangas", "Last "+ receivedDataList[1].length + " measurements", "", "Y axis"]);
 
 				// var headers = await getHeader(servicePath, service);
 				// var response = await browser(url, headers);
@@ -402,8 +415,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		btn.onclick = async function() {
 			console.log("search")
 			var alertDate = new Date(initDate)
-			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(minutes));
-			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(minutes));
+			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(30));
+			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(30));
 			var btnList = [];
 			if(!onOffActivate) {
 				var graphsList = [];
@@ -463,7 +476,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						}
 					}
 				}
-			sendGraph(graphsList, "siptronix");
+			sendGraph(graphsList, ["Siptronix", receivedDataList[1].length + " alerts logged", [{"color": "#FF0000", "width": 2, "value": receivedDataList[1].length / 2 - 0.5}], "Y axis"]);
 			}
 			createNewPage(btnList);
 
@@ -499,10 +512,10 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						dataCollection2 = dataCollection[i][1];
 					}
 					// Collect the timestamps and values and send to graphwidget
+					console.log(dataCollection2)
 					for (var j = 0; j < dataCollection2.length; j++) {
 						measData[0][0].push(dataCollection2[j].attrValue);
 						measData[0][1].push(dataCollection2[j].recvTime);
-
 						tempList1[0].push(dataCollection2[j].attrValue.L1);
 						tempList1[1].push(dataCollection2[j].recvTime);
 						tempList2[0].push(dataCollection2[j].attrValue.L2);
@@ -510,13 +523,33 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						tempList3[0].push(dataCollection2[j].attrValue.L3);
 						tempList3[1].push(dataCollection2[j].recvTime);
 					}
+					var sipUnit;
+					if (nameBtn === "activePower" || nameBtn === "totalActivePower") {
+				    	sipUnit = "Watts (W)";
+				    } else if (nameBtn === "apparentPower" || nameBtn === "totalApparentPower") {
+				    	sipUnit = "Volt-Ampere (VA)";
+				    } else if (nameBtn === "current") {
+				        sipUnit = "Ampers (A)";
+				    } else if (nameBtn === "frequency") {
+				        sipUnit = "Hertz (Hz)";
+				    } else if (nameBtn === "powerFactor") {
+				        sipUnit = "Number between -1 and 1";
+				    } else if (nameBtn === "reactivePower" || nameBtn === "totalReactivePower") {
+				        sipUnit = "Volts-Ampere-Reactive (VAr)";
+				    } else if (nameBtn === "totalActiveEnergyImport") {
+				        sipUnit = "Kilowatt Hour (kWh)";
+				    } else if (nameBtn === "voltage") {
+				        sipUnit = "Volts (V)";
+				    } else {
+				        sipUnit = "Ei maaritelty";
+				    }
 					if (typeof measData[0][0][0] === 'object') {
 						graphData.push(tempList1);
 						graphData.push(tempList2);
 						graphData.push(tempList3);
-						sendGraph(graphData, "siptronix");
+						sendGraph(graphData, ["Siptronix", tempList1[0].length + " measurements logged", "", sipUnit]);
 					} else {
-						sendGraph(measData, "siptronix");
+						sendGraph(measData, ["Siptronix", tempList1[0].length + " measurements logged", "", sipUnit]);
 					}
 				}
 
@@ -567,7 +600,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				} else {
 					graphData[0].push(["Temperature - Pikku-Iikka daycare center"]);
 				}
-				sendGraph(graphData, "aqvaio");
+				sendGraph(graphData, ["Aqva.io", "Last " + data.length + " measurements", "", "Water reading and temperature"]);
 				console.log(dates)
 				console.log(data)
 				// Aqvaio's water reading measurements
@@ -611,7 +644,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				} else {
 					graphData[0].push(["Water reading - Pikku-Iikka daycare center"]);
 				}
-				sendGraph(graphData, "aqvaio");
+				sendGraph(graphData, ["Aqva.io", "Last " + data.length + " measurements", "", "Water reading and temperature"]);
 				console.log(dates)
 				console.log(data)
 			}
@@ -634,16 +667,10 @@ function init()
 		var btn  = createButton(list[i][0], list[i][1], list[i][2], list[i][3], list[i][4]);
 		document.body.appendChild(btn);
 	}
-	var btn_z = document.createElement("BUTTON");
-	btn_z.innerHTML = "Test";
-	btn_z.onclick = function(){
-		loopArray();
-	};
-	document.body.appendChild(btn_z);
 	MashupPlatform.wiring.registerCallback('AggrMethod', function(data) {aggrMethod=data; console.log(`aggrMethod: ${aggrMethod}`)});
 	MashupPlatform.wiring.registerCallback('AggrPeriod', function(data) {aggrPeriod=data; console.log(`aggrPeriod: ${aggrPeriod}`)});
-	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; console.log(`dates: ${inputDates}`)});
-    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; console.log(`nvalue: ${inputNValue}`)});
+	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; inputNValue = null; console.log(`dates: ${inputDates}`)});
+    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; inputDates = null; console.log(`nvalue: ${inputNValue}`)});
 	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${minutes}`)});
 	}
 
