@@ -6,9 +6,10 @@
 // http://pan0107.panoulu.net:8000/orion/v2/entities?limit=300&options=count&orderBy=id
 
 var theUrl = "http://pan0107.panoulu.net:8000/orion/v2/entities?limit=300&options=count&orderBy=id";
-var minutes = "10";
+var minutes = "30";
 var initDate;
 var dataCollection = [];
+var aggrMethod, aggrPeriod, inputDates, inputNValue;
 
 class Graphs {
 	// Graphs is global class meant to store and remove graphs.
@@ -37,7 +38,7 @@ const graphColor = [
     "#7CFC00", "#00FFFF", "#00008B", "#FFFF00", "#008000", "#800080", "#00FF00",
     "#0000FF", "#000000", "#000080", "#7CFC00", "#E0E0E0", "#D2D2D2" ];
 
-function sendGraph(valueList, alertData) {
+function sendGraph(valueList, location) {
 	// Function gets tempList and name outputs graph to Highcharts
 	// Connect Graph to Highcharts Options in wiring mode.
 
@@ -45,12 +46,10 @@ function sendGraph(valueList, alertData) {
 	// [1] = xAxis label
 	// [2] = name of the value
 
-	console.log("valuelist: ")
-	console.log(valueList)
-
-
 	var compValueList = [];
 	var xAxisDict = [];
+
+	console.log(valueList)
 
 	for(var i = 0; i < valueList.length; i++)
 	{
@@ -61,8 +60,8 @@ function sendGraph(valueList, alertData) {
 		});
 	}
 
-	if (alertData) {
-		var tempData = {
+	if (location === "siptronix") {
+		var graphData = {
 			"title" : { "text" : "Siptronix", "x": -20 },
 			"subtitle": { "text" : "Alert date: " + initDate, "x": -20},
 			"xAxis": { "categories": valueList[0][1],
@@ -72,7 +71,19 @@ function sendGraph(valueList, alertData) {
 	                "value": compValueList[0].data.length / 2 - 0.5
             	}]
 			},
-			"yAxis": { "title" : { "text": "Temperature (°C)" },
+			"yAxis": { "title" : { "text": "Bulbs" },
+			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
+			"tooltip": { "valueSuffix": "" },
+			"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
+			"series":
+				compValueList,
+		}
+	} else if(location === "aqvaio") {
+		var graphData = {
+			"title" : { "text" : "Aqva.io", "x": -20 },
+			"subtitle": { "text" : "Last "+ valueList[0][1].length + " measurements", "x": -20},
+			"xAxis": { "categories": valueList[0][1] },
+			"yAxis": { "title" : { "text": "Water reading and temperature" },
 			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
 			"tooltip": { "valueSuffix": "" },
 			"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
@@ -80,9 +91,9 @@ function sendGraph(valueList, alertData) {
 				compValueList,
 		}
 	} else {
-		var tempData = {
+		var graphData = {
 			"title" : { "text" : "Siptronix", "x": -20 },
-			"subtitle": { "text" : "Last 30 results", "x": -20},
+			"subtitle": { "text" : "Last "+ valueList[0][1].length + " measurements", "x": -20},
 			"xAxis": { "categories": valueList[0][1] },
 			"yAxis": { "title" : { "text": "Temperature (°C)" },
 			"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
@@ -92,7 +103,7 @@ function sendGraph(valueList, alertData) {
 				compValueList,
 		}
 	}
-	MashupPlatform.wiring.pushEvent("Graph", tempData);
+	MashupPlatform.wiring.pushEvent("Graph", graphData);
 
 }
 
@@ -228,55 +239,101 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	var url = theUrl;
 	var btn = document.createElement("BUTTON");
 	btn.innerHTML = nameBtn;
+
+	/*
+	graphsList:
+		"data" : 		valueList[i][0],
+		"timestamp": 	valuelist[i][1]
+		"name" : 		valueList[i][2],
+	});
+
+	createButton(nameBtn, idBtn, classBtn, servicePath, service)
+
+	*/
+
 	if(classBtn === "buttonSearch") {
 		// Search is meant to indicate that button will not draw graphs, but make searches further for specific data
 		btn.onclick =  async function(){
 			var headers = await getHeader(servicePath, service);
 			var response = await browser(url, headers);
 			var btnList = [];
-			for(var i = 0; i < response.length; i ++)
-			{
-				if(response[i]["type"] === "Room") {
-					var id = response[i]["id"];
-					var sub_servicePath = "/f/" + id.charAt(1) + "/" + id.slice(1);
-					var headers_Room = await getHeader(sub_servicePath , service);
-					var sub_response = await browser(url, headers_Room);
-					for(var c = 0; c < sub_response.length; c++)
-					{
-						// This part is meant for Talvikangas button creation. Does not work as intended
-						var keys = Object.keys(sub_response[c]);
-						for(var g = 0; g < keys.length; g++)
+			console.log(response);
+			if (idBtn === "aqvaio") {
+				var tempList = [[], [], []];
+				var waterList = [[], [], []];
+
+				// Collect the most recent measurements from Aqvaio's 3 temperature and water reading measurements
+				for (var i=0; i < response.length; i++) {
+					if (response[i].type === "AirQualityObserved") {
+						if (tempList[2].length === 0) {
+							tempList[2].push(response[i].type);
+						}
+						tempList[0].push(response[i].temperature.value);
+						tempList[1].push(response[i].dateObserved.value);
+					} else if (response[i].type === "Device") {
+						if (waterList[2].length === 0) {
+							waterList[2].push(response[i].type + " (water reading)");
+						}
+						waterList[0].push(response[i].value.value);
+						waterList[1].push(response[i].value.metadata.timestamp.value + " - " + response[i].description.value);
+					}
+					if (response[i].type === "Device") {
+						var newBtn = createButton(response[i].id, response[i].type, "buttonGraph_aqva", "/oulu", "aqvaio");
+					} else {
+						var newBtn = createButton(response[i].id, response[i].type, "buttonGraph_aqva", "/oulu", "aqvaio");
+					}
+
+					btnList.push(newBtn);
+				}
+				graphContainer.graphList = [];
+				graphContainer.graphList.push(waterList, tempList);
+				sendGraph(graphContainer.graphList, "aqvaio");
+			} else {
+				for(var i = 0; i < response.length; i ++)
+				{
+					if(response[i]["type"] === "Room") {
+						var id = response[i]["id"];
+						var sub_servicePath = "/f/" + id.charAt(1) + "/" + id.slice(1);
+						var headers_Room = await getHeader(sub_servicePath , service);
+						var sub_response = await browser(url, headers_Room);
+						for(var c = 0; c < sub_response.length; c++)
 						{
-							if(keys[g] !== ("TimeInstant" || "location" || "type"))
+							// This part is meant for Talvikangas button creation. Does not work as intended
+							var keys = Object.keys(sub_response[c]);
+							for(var g = 0; g < keys.length; g++)
 							{
-								var newBtn = createButton(sub_response[c]["id"], sub_response[c]["type"], "buttonGraph", sub_servicePath, service);
-								btnList.push(newBtn);
+								if(keys[g] !== ("TimeInstant" || "location" || "type"))
+								{
+									var newBtn = createButton(sub_response[c]["id"], sub_response[c]["type"], "buttonGraph", sub_servicePath, service);
+									btnList.push(newBtn);
+								}
 							}
 						}
 					}
-				}
 
-				// Creates Initial Graph Window for data from Siptronix
-				else if(response[i]["type"] == "Alert") {
-					var keys = Object.keys(response[i]["data"]["value"]);
-					if(keys.length > bulbsList.length) {
-						// Adds more empty lists
-						while(keys.length != bulbsList.length) {
-							bulbsList.unshift([[], []]);
+					// Creates Initial Graph Window for data from Siptronix
+					else if(response[i]["type"] == "Alert") {
+						var keys = Object.keys(response[i]["data"]["value"]);
+						if(keys.length > bulbsList.length) {
+							// Adds more empty lists
+							while(keys.length != bulbsList.length) {
+								bulbsList.unshift([[], []]);
+							}
 						}
-					}
-					for(var d = 0; d < keys.length; d++) {
-						bulbsList[d][0].push(response[i]["data"]["value"][keys[d]]);
-						bulbsList[d][1].push(i);
-					}
-					// TO-DO: Create buttons for all individual Alerts
-					initDate = response[i]["dateIssued"]["value"];
-					var idsBtnList = ["/type/3PhaseACMeasurement", "/id/Ritaharju_POS39_lighting", "/attributes/"];
+						for(var d = 0; d < keys.length; d++) {
+							bulbsList[d][0].push(response[i]["data"]["value"][keys[d]]);
+							bulbsList[d][1].push(i);
+						}
+						// TO-DO: Create buttons for all individual Alerts
+						initDate = response[i]["dateIssued"]["value"];
+						var idsBtnList = ["/type/3PhaseACMeasurement", "/id/Ritaharju_POS39_lighting", "/attributes/"];
 
-					var newBtn = createButton(response[i]["id"], idsBtnList, "buttonSearch_sip", "/oulu", "siptronix");
-					btnList.push(newBtn);
+						var newBtn = createButton(response[i]["id"], idsBtnList, "buttonSearch_sip", "/oulu", "siptronix");
+						btnList.push(newBtn);
+					}
 				}
 			}
+
 			if(bulbsList.length > 0) {
 				for(var h = 0; h < bulbsList.length; h++) {
 					bulbsList[h].push([keys[h]]);
@@ -305,6 +362,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				{
 					data.push([nameBtn, parsedData[i]["attrValue"], parsedData[i]["recvTime"]]);
 				}
+				graphContainer.graphList = [];
 				graphContainer.graphList.push(data);
 				sendGraph(graphContainer.graphList);
 			}
@@ -315,6 +373,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			onOffActivate = !onOffActivate;
 		}
 	}
+	// buttons for each Siptronix alerts
 	else if(classBtn == "buttonSearch_sip") {
 		// classBtn buttonGraph_sip handles siptronix data and draws graphs based on it
 		btn.onclick = async function() {
@@ -326,6 +385,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			if(!onOffActivate) {
 				var graphsList = [];
 				var sipSearchList = ["activePower", "apparentPower", "current", "frequency", "powerFactor", "reactivePower", "totalActiveEnergyImport", "totalActivePower", "totalApparentPower", "totalReactivePower", "voltage"];
+				dataCollection = [];
 				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
 				for(var c = 0; c < sipSearchList.length; c++) {
 					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2] + sipSearchList[c] + "?lastN=100&dateFrom=" + dateFrom + "&dateTo=" + dateTo;
@@ -341,7 +401,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					console.log(receivedData);
 
 					// createButton(nameBtn, idBtn, classBtn, servicePath, service)
-					var graphBtn = createButton(sipSearchList[c], "id: "+c, "buttonGraph_sip", "/oulu", "/siptronix");
+					var graphBtn = createButton(sipSearchList[c], "id: "+c, "buttonGraph_sip", "/oulu", "siptronix");
 					btnList.push(graphBtn)
 
 					if(Object.keys(receivedData[0]["attrValue"]).length == 0) {
@@ -380,9 +440,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						}
 					}
 				}
-				console.log(receivedData)
-				console.log(receivedDataList)
-			sendGraph(graphsList, true);
+			sendGraph(graphsList, "siptronix");
 			}
 			createNewPage(btnList);
 
@@ -391,11 +449,11 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		btn.onclick = async function() {
 			var measData = [[ [], [], [] ]];
 			var graphData = [];
+			var dataCollection2 = [];
+			// Loops through the collected data
 			for (var i = 0; i < dataCollection.length; i++) {
 				if (nameBtn === dataCollection[i][0]) {
 					measData[0][2].push(nameBtn)
-
-					console.log(initDate)
 
 					let tempList1 = [ [], [], [] ];
 					let tempList2 = [ [], [], [] ];
@@ -404,29 +462,135 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					tempList1[2].push(nameBtn + " L1");
 					tempList2[2].push(nameBtn + " L2");
 					tempList3[2].push(nameBtn + " L3");
+					var tempData = dataCollection[i][1];
+					// Check the selected minutes and based on in, select the correct amount of data
+					if (minutes === "10") {
+						for (var k = 0; k < 24; k++ && dataCollection.length !== 22) {
+							dataCollection2.push(tempData[tempData.length / 2 - 12 + k]);
+						}
+					} else if (minutes === "20" && dataCollection.length !== 44) {
+						for (var k = 0; k < 44; k++) {
+							dataCollection2.push(tempData[tempData.length / 2 - 22 + k]);
+						}
+					} else {
+						dataCollection2 = dataCollection[i][1];
+					}
+					// Collect the timestamps and values and send to graphwidget
+					for (var j = 0; j < dataCollection2.length; j++) {
+						measData[0][0].push(dataCollection2[j].attrValue);
+						measData[0][1].push(dataCollection2[j].recvTime);
 
-
-					for (var j = 0; j < dataCollection[i][1].length; j++) {
-						measData[0][0].push(dataCollection[i][1][j].attrValue);
-						measData[0][1].push(dataCollection[i][1][j].recvTime);
-
-						tempList1[0].push(dataCollection[i][1][j].attrValue.L1);
-						tempList1[1].push(dataCollection[i][1][j].recvTime);
-						tempList2[0].push(dataCollection[i][1][j].attrValue.L2);
-						tempList2[1].push(dataCollection[i][1][j].recvTime);
-						tempList3[0].push(dataCollection[i][1][j].attrValue.L3);
-						tempList3[1].push(dataCollection[i][1][j].recvTime);
+						tempList1[0].push(dataCollection2[j].attrValue.L1);
+						tempList1[1].push(dataCollection2[j].recvTime);
+						tempList2[0].push(dataCollection2[j].attrValue.L2);
+						tempList2[1].push(dataCollection2[j].recvTime);
+						tempList3[0].push(dataCollection2[j].attrValue.L3);
+						tempList3[1].push(dataCollection2[j].recvTime);
 					}
 					if (typeof measData[0][0][0] === 'object') {
 						graphData.push(tempList1);
 						graphData.push(tempList2);
 						graphData.push(tempList3);
-						sendGraph(graphData, true);
+						sendGraph(graphData, "siptronix");
 					} else {
-						sendGraph(measData, true);
+						sendGraph(measData, "siptronix");
 					}
 				}
 
+			}
+		}
+	} else if (classBtn === "buttonGraph_aqva") {
+		btn.onclick = async function() {
+			var dates = [];
+			var data = [];
+			var graphData = [[]];
+			// Aqvaio's temperature measurements
+			if (idBtn === "AirQualityObserved") {
+				url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/temperature?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				// search for the correct data based on button's attributes
+				var headers = await getHeader(servicePath, service);
+				var response = await browser(url, headers);
+				var values = response.contextResponses[0].contextElement.attributes[0].values;
+				console.log(values)
+
+				// set the timestamps correct based on aggrPeriod and push timestamps & data to lists, ready to send to graphwidget
+				for (var i = 0; i < values.length; i++) {
+					var originDate = new Date(values[i]._id.origin);
+					var newDate;
+					dates.push(originDate.toISOString().substr(0,18));
+					for (var j = 0; j < values[i].points.length; j++) {
+						if (aggrPeriod === "second") {
+							newDate = originDate.setSeconds(originDate.getSeconds() + 1);
+						} else if (aggrPeriod === "minute") {
+							newDate = originDate.setMinutes(originDate.getMinutes() + 1);
+						} else if (aggrPeriod === "hour") {
+							newDate = originDate.setHours(originDate.getHours() + 1);
+						} else if (aggrPeriod === "day") {
+							newDate = originDate.setDate(originDate.getDate() + 1);
+						} else if (aggrPeriod === "month") {
+							newDate = originDate.setMonth(originDate.geMonth() + 1);
+						}
+						var formatDate = new Date(newDate);
+						dates.push(formatDate.toISOString().substr(0,19));
+						data.push(parseInt(values[i].points[j][aggrMethod]));
+					}
+				}
+				graphData[0].push(data);
+				graphData[0].push(dates);
+				if (nameBtn === "AirQualityObserved:0004815870800252") {
+					graphData[0].push(["Temperature - Ritaharju sportcenter"]);
+				} else if (nameBtn === "AirQualityObserved:0010588167080077") {
+					graphData[0].push(["Temperature - Environment house"]);
+				} else {
+					graphData[0].push(["Temperature - Pikku-Iikka daycare center"]);
+				}
+				sendGraph(graphData, "aqvaio");
+				console.log(dates)
+				console.log(data)
+				// Aqvaio's water reading measurements
+			} else if (idBtn === "Device") {
+				url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/value?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				// search for the correct data based on button's attributes
+				var headers = await getHeader(servicePath, service);
+				var response = await browser(url, headers);
+				var values = response.contextResponses[0].contextElement.attributes[0].values;
+				console.log(values)
+
+				// set the timestamps correct based on aggrPeriod and push timestamps & data to lists, ready to send to graphwidget
+				for (var i = 0; i < values.length; i++) {
+					var originDate = new Date(values[i]._id.origin);
+					var newDate;
+					dates.push(originDate.toISOString().substr(0,18));
+					for (var j = 0; j < values[i].points.length; j++) {
+						if (aggrPeriod === "second") {
+							newDate = originDate.setSeconds(originDate.getSeconds() + 1);
+						} else if (aggrPeriod === "minute") {
+							newDate = originDate.setMinutes(originDate.getMinutes() + 1);
+						} else if (aggrPeriod === "hour") {
+							newDate = originDate.setHours(originDate.getHours() + 1);
+						} else if (aggrPeriod === "day") {
+							newDate = originDate.setDate(originDate.getDate() + 1);
+						} else if (aggrPeriod === "month") {
+							newDate = originDate.setMonth(originDate.geMonth() + 1);
+						}
+						var formatDate = new Date(newDate);
+						dates.push(formatDate.toISOString().substr(0,19));
+						data.push(parseInt(values[i].points[j][aggrMethod]));
+					}
+				}
+				graphData[0].push(data);
+				graphData[0].push(dates);
+				// Sets the correct name for the graph
+				if (nameBtn === "Device:0004815870800252") {
+					graphData[0].push(["Water reading - Ritaharju sportcenter"]);
+				} else if (nameBtn === "Device:0010588167080077") {
+					graphData[0].push(["Water reading - Environment house"]);
+				} else {
+					graphData[0].push(["Water reading - Pikku-Iikka daycare center"]);
+				}
+				sendGraph(graphData, "aqvaio");
+				console.log(dates)
+				console.log(data)
 			}
 		}
 	}
@@ -436,7 +600,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 function init()
 {
 	// Predefined values
-	var list = [["Talvikangas", "tal", "buttonSearch", "", "tal"], ["Siptronix", "", "buttonSearch", "", "siptronix"]];
+	var list = [["Talvikangas", "tal", "buttonSearch", "", "tal"], ["Siptronix", "siptronix", "buttonSearch", "", "siptronix"], ["Aqva.io", "aqvaio", "buttonSearch", "/oulu", "aqvaio"],
+                ["JAS partners", "jas_oulu", "buttonSearch", "", "jas_oulu"], ["Ymparistotalo", "ymp", "buttonSearch", "", "ymp"]];
 	// Clears HTML and sets up "main page"
 	document.body.innerHTML = '';
 	// Initializes the widget
@@ -452,9 +617,11 @@ function init()
 		loopArray();
 	};
 	document.body.appendChild(btn_z);
-	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; console.log(`dates: ${data}`)});
-    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; console.log(`nvalue: ${data2}`)});
-	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${mins}`)});
+	MashupPlatform.wiring.registerCallback('AggrMethod', function(data) {aggrMethod=data; console.log(`aggrMethod: ${aggrMethod}`)});
+	MashupPlatform.wiring.registerCallback('AggrPeriod', function(data) {aggrPeriod=data; console.log(`aggrPeriod: ${aggrPeriod}`)});
+	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; console.log(`dates: ${inputDates}`)});
+    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; console.log(`nvalue: ${inputNValue}`)});
+	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${minutes}`)});
 	}
 
 
