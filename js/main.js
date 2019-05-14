@@ -547,9 +547,9 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						graphData.push(tempList1);
 						graphData.push(tempList2);
 						graphData.push(tempList3);
-						sendGraph(graphData, ["Siptronix", tempList1[0].length + " measurements logged", "", sipUnit]);
+						sendGraph(graphData, ["Siptronix", tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
 					} else {
-						sendGraph(measData, ["Siptronix", tempList1[0].length + " measurements logged", "", sipUnit]);
+						sendGraph(measData, ["Siptronix", tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
 					}
 				}
 
