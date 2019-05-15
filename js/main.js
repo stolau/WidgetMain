@@ -226,9 +226,17 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	if(classBtn === "buttonSearch") {
 		// Search is meant to indicate that button will not draw graphs, but make searches further for specific data
 		btn.onclick =  async function(){
+			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 			var headers = await getHeader(servicePath, service);
 			var response = await browser(url, headers);
 			var btnList = [];
+			var rooms = [];
+			var temperatureData = [];
+			var carbonDioxideData = [];
+			var soundAvgData = [];
+			var soundPeakData = [];
+			var humidityData = [];
+			var vocData = [];
 			console.log(response);
 			if (idBtn === "aqvaio") {
 				var tempList = [[], [], []];
@@ -264,6 +272,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						var sub_servicePath = "/f/" + id.charAt(1) + "/" + id.slice(1);
 						var headers_Room = await getHeader(sub_servicePath , service);
 						var sub_response = await browser(url, headers_Room);
+						console.log(headers_Room)
+						console.log(sub_response)
 						var deviceIdList = [];
 						for(var k = 0; k < sub_response.length; k++) {
 							var keys = Object.keys(sub_response[k]);
@@ -278,13 +288,81 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 								}
 							}
 						}
+						// Save all the current values from every room and send them to graph
+						if (sub_response[0].type === "Room" || sub_response[0].type === "AirQualityObserved") {
+							// Find id of the room
+							for (let i in sub_response) {
+								if (sub_response[i].type === "Room") {
+									rooms.push(sub_response[i].id)
+								}
+							}
+							// Find time
+							for (let i in sub_response) {
+								for (let obj in sub_response[i]) {
+									//console.log(sub_response[i][obj])
+									if (obj === "TimeInstant") {
+										// If room has multiple same sensor, add more id to rooms list
+										if (rooms[rooms.length-1].length > 4) {
+											rooms.push(rooms[rooms.length-1].substr(0,4).concat(" / ", sub_response[i].TimeInstant.value+ " / id: "+sub_response[i].id))
+										} else {
+											rooms[rooms.length-1] = rooms[rooms.length-1].concat(" / ", sub_response[i].TimeInstant.value+ " / id: "+sub_response[i].id)
+										}
+									}
+								// console.log(sub_response[i][obj])
+								try {
+									if (sub_response[i][obj].metadata.unitCode.value === "CEL") {
+										if (sub_response[i][obj].value !== "None") {
+											temperatureData.push(sub_response[i][obj].value);
+										}
+									}
+									if (sub_response[i][obj].metadata.unitCode.value === "59") {
+										carbonDioxideData.push(sub_response[i][obj].value);
+									}
+									if (sub_response[i][obj].metadata.common_name.value === "soundAvg") {
+										soundAvgData.push(sub_response[i][obj].value)
+									}
+									if (sub_response[i][obj].metadata.common_name.value === "soundPeak") {
+										soundPeakData.push(sub_response[i][obj].value)
+									}
+									if (sub_response[i][obj].metadata.unitCode.value === "P1") {
+										humidityData.push(parseFloat(sub_response[i][obj].value))
+									}
+									if (sub_response[i][obj].metadata.unitCode.value === "61") {
+										vocData.push(sub_response[i][obj].value)
+									}
+									} catch(err) {
+										continue
+									}
+								}
+								// Push nulls
+								if (temperatureData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									temperatureData.push(null);
+								}
+								if (carbonDioxideData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									carbonDioxideData.push(null);
+								}
+								if (soundAvgData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									soundAvgData.push(null);
+								}
+								if (soundPeakData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									soundPeakData.push(null);
+								}
+								if (humidityData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									humidityData.push(null);
+								}
+								if (vocData.length < rooms.length  && rooms[rooms.length-1].length > 4) {
+									vocData.push(null);
+								}
+							}
+						}
+
+
 						//console.log(deviceIdList);
 						if(deviceIdList.length > 0) {
 							var btn = createButton(id, deviceIdList, "buttonGraph_tal", sub_servicePath, "tal");
 							btnList.push(btn);
 						}
 					}
-
 
 					// Creates Initial Graph Window for data from Siptronix
 					else if(response[i]["type"] == "Alert") {
@@ -307,6 +385,18 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						btnList.push(newBtn);
 					}
 				}
+				if (nameBtn === "Talvikangas") {
+					var graphData = [];
+					graphData.push([temperatureData, rooms, "Temp (°C)"])
+					graphData.push([carbonDioxideData, rooms, "CO (ppm)"])
+					graphData.push([soundAvgData, rooms, "SoundAvg(db?)"])
+					graphData.push([soundPeakData, rooms, "SoundPeak(db?)"])
+					graphData.push([humidityData, rooms, "Humi (%)"])
+					graphData.push([vocData, rooms, "VOC (ppb?)"])
+					sendGraph(graphData, ["Talvikangas: Most recent values",
+						`${temperatureData.filter(Boolean).length} temperature values, ${carbonDioxideData.filter(Boolean).length} CO values, ${soundAvgData.filter(Boolean).length} SoundAvg values,
+						 ${soundPeakData.filter(Boolean).length} SoundPeak values, ${humidityData.filter(Boolean).length} Humidity values, ${vocData.filter(Boolean).length} VOC values`, "", "Y axis"])
+				}
 			}
 
 			if(bulbsList.length > 0) {
@@ -317,7 +407,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				bulbsList.splice(0, 1);
 				bulbsList.splice(2, 1);
 
-				sendGraph(bulbsList, ["Siptronix", "Alert date: " + initDate, "", "Bulbs"]);
+				sendGraph(bulbsList, ["Siptronix alerts", "Latest alert: " + initDate, "", "Bulbs"]);
 			}
 			createNewPage(btnList);
 		}
@@ -326,7 +416,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		btn.onclick = async function(){
 			var aggrBool = false;
 			if(!onOffActivate) {
-				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
+				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 				// Pushes graph to list of graphs
 				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + "AirQualityObserved" + "/id/" + idBtn + "/attributes/tk11te22?lastN=50";
 				var graphsList = [];
@@ -384,7 +474,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					graphsList.push(receivedDataList);
 
 				}
-				sendGraph(graphsList, ["Talvikangas", "Last "+ receivedDataList[1].length + " measurements", "", "Y axis"]);
+				sendGraph(graphsList, ["Talvikangas room data", "Last "+ receivedDataList[1].length + " measurements", "", "Y axis"]);
 
 				// var headers = await getHeader(servicePath, service);
 				// var response = await browser(url, headers);
@@ -413,7 +503,6 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	else if(classBtn == "buttonSearch_sip") {
 		// classBtn buttonGraph_sip handles siptronix data and draws graphs based on it
 		btn.onclick = async function() {
-			console.log("search")
 			var alertDate = new Date(initDate)
 			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(30));
 			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(30));
@@ -422,7 +511,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				var graphsList = [];
 				var sipSearchList = ["activePower", "apparentPower", "current", "frequency", "powerFactor", "reactivePower", "totalActiveEnergyImport", "totalActivePower", "totalApparentPower", "totalReactivePower", "voltage"];
 				dataCollection = [];
-				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING...", "x": -20}});
+				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 				for(var c = 0; c < sipSearchList.length; c++) {
 					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2] + sipSearchList[c] + "?lastN=100&dateFrom=" + dateFrom + "&dateTo=" + dateTo;
 					var headers = await getHeader(servicePath, service);
@@ -476,13 +565,14 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						}
 					}
 				}
-			sendGraph(graphsList, ["Siptronix", receivedDataList[1].length + " alerts logged", [{"color": "#FF0000", "width": 2, "value": receivedDataList[1].length / 2 - 0.5}], "Y axis"]);
+			sendGraph(graphsList, ["Siptronix " + nameBtn, receivedDataList[1].length + " alerts logged", [{"color": "#FF0000", "width": 2, "value": receivedDataList[1].length / 2 - 0.5}], "Y axis"]);
 			}
 			createNewPage(btnList);
 
 		}
 	} else if (classBtn === "buttonGraph_sip") {
 		btn.onclick = async function() {
+			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 			var measData = [[ [], [], [] ]];
 			var graphData = [];
 			var dataCollection2 = [];
@@ -501,8 +591,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 					var tempData = dataCollection[i][1];
 					// Check the selected minutes and based on in, select the correct amount of data
 					if (minutes === "10") {
-						for (var k = 0; k < 24; k++ && dataCollection.length !== 22) {
-							dataCollection2.push(tempData[tempData.length / 2 - 12 + k]);
+						for (var k = 0; k < 22; k++ && dataCollection.length !== 22) {
+							dataCollection2.push(tempData[tempData.length / 2 - 11 + k]);
 						}
 					} else if (minutes === "20" && dataCollection.length !== 44) {
 						for (var k = 0; k < 44; k++) {
@@ -547,9 +637,9 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 						graphData.push(tempList1);
 						graphData.push(tempList2);
 						graphData.push(tempList3);
-						sendGraph(graphData, ["Siptronix", tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
+						sendGraph(graphData, ["Siptronix alert " + tempList1[1][tempList1[1].length / 2 -1] + " - " + tempList1[1][tempList1[1].length / 2 + 1], tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
 					} else {
-						sendGraph(measData, ["Siptronix", tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
+						sendGraph(measData, ["Siptronix alert " + tempList1[1][tempList1[1].length / 2 -1] + " - " + tempList1[1][tempList1[1].length / 2 + 1], tempList1[0].length + " measurements logged", [{"color": "#FF0000", "width": 2, "value": tempList1[0].length / 2 - 0.5}], sipUnit]);
 					}
 				}
 
@@ -557,12 +647,17 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		}
 	} else if (classBtn === "buttonGraph_aqva") {
 		btn.onclick = async function() {
+			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 			var dates = [];
 			var data = [];
 			var graphData = [[]];
 			// Aqvaio's temperature measurements
 			if (idBtn === "AirQualityObserved") {
-				url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/temperature?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				if (inputDates === null) {
+					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/temperature?aggrMethod=max&aggrPeriod=day&dateFrom=2019-01-01T00:00&dateTo=2019-05-15T00:00";
+				} else {
+					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/temperature?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				}
 				// search for the correct data based on button's attributes
 				var headers = await getHeader(servicePath, service);
 				var response = await browser(url, headers);
@@ -585,10 +680,17 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							newDate = originDate.setDate(originDate.getDate() + 1);
 						} else if (aggrPeriod === "month") {
 							newDate = originDate.setMonth(originDate.geMonth() + 1);
+						} else {
+							newDate = originDate.setDate(originDate.getDate() + 1);
 						}
 						var formatDate = new Date(newDate);
 						dates.push(formatDate.toISOString().substr(0,19));
-						data.push(parseInt(values[i].points[j][aggrMethod]));
+						if (aggrMethod === undefined) {
+							data.push(parseInt(values[i].points[j]["max"]));
+						} else {
+							data.push(parseInt(values[i].points[j][aggrMethod]));
+						}
+
 					}
 				}
 				graphData[0].push(data);
@@ -600,12 +702,16 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				} else {
 					graphData[0].push(["Temperature - Pikku-Iikka daycare center"]);
 				}
-				sendGraph(graphData, ["Aqva.io", "Last " + data.length + " measurements", "", "Water reading and temperature"]);
+				sendGraph(graphData, ["Aqva.io", "Latest measurements from " + data.length + " devices", "", "Water reading and temperature"]);
 				console.log(dates)
 				console.log(data)
 				// Aqvaio's water reading measurements
 			} else if (idBtn === "Device") {
-				url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/value?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				if (inputDates === null) {
+					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/value?aggrMethod=max&aggrPeriod=day&dateFrom=2019-01-01T00:00&dateTo=2019-12-24T00:00";
+				} else {
+					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/"+idBtn+"/id/"+nameBtn+"/attributes/value?aggrMethod="+aggrMethod+"&aggrPeriod="+aggrPeriod+"&dateFrom="+inputDates[0]+"&dateTo="+inputDates[1];
+				}
 				// search for the correct data based on button's attributes
 				var headers = await getHeader(servicePath, service);
 				var response = await browser(url, headers);
@@ -628,10 +734,16 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							newDate = originDate.setDate(originDate.getDate() + 1);
 						} else if (aggrPeriod === "month") {
 							newDate = originDate.setMonth(originDate.geMonth() + 1);
+						} else {
+							newDate = originDate.setDate(originDate.getDate() + 1);
 						}
 						var formatDate = new Date(newDate);
 						dates.push(formatDate.toISOString().substr(0,19));
-						data.push(parseInt(values[i].points[j][aggrMethod]));
+						if (aggrMethod === undefined) {
+							data.push(parseInt(values[i].points[j]["max"]));
+						} else {
+							data.push(parseInt(values[i].points[j][aggrMethod]));
+						}
 					}
 				}
 				graphData[0].push(data);
@@ -669,8 +781,8 @@ function init()
 	}
 	MashupPlatform.wiring.registerCallback('AggrMethod', function(data) {aggrMethod=data; console.log(`aggrMethod: ${aggrMethod}`)});
 	MashupPlatform.wiring.registerCallback('AggrPeriod', function(data) {aggrPeriod=data; console.log(`aggrPeriod: ${aggrPeriod}`)});
-	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; inputNValue = null; console.log(`dates: ${inputDates}`)});
-    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; inputDates = null; console.log(`nvalue: ${inputNValue}`)});
+	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; console.log(`dates: ${inputDates}`)});
+    MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; console.log(`nvalue: ${inputNValue}`)});
 	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${minutes}`)});
 	}
 
