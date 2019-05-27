@@ -1,6 +1,5 @@
 "use strict";
 
-
 /* config.xml cant read this url for some reason. Everytime app is updated, this url needs to be
     manually placed to preferences*/
 // http://pan0107.panoulu.net:8000/orion/v2/entities?limit=300&options=count&orderBy=id
@@ -199,7 +198,6 @@ function createNewPage(btnList) {
 
 function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 {
-	// /f/1/116
 	// Creates new button which contains all the information required to make requestHeaders
 	// for new search
 	// idBtn is list with type, id, attribute
@@ -238,6 +236,10 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			var humidityData = [];
 			var vocData = [];
 			console.log(response);
+
+			// Complex if-else structure because aqvaio has same kind of attributes as talvikangas data so
+			// aqvaio needs to be checked first and then function can go to for loop which works for rest of the data.
+			// --- Should be restructured when possible ---
 			if (idBtn === "aqvaio") {
 				var tempList = [[], [], []];
 				var waterList = [[], [], []];
@@ -378,6 +380,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							bulbsList[d][1].push(i);
 						}
 						// TO-DO: Create buttons for all individual Alerts
+						console.log(response[i]["dateIssued"]["value"])
 						initDate = response[i]["dateIssued"]["value"];
 						var idsBtnList = ["/type/3PhaseACMeasurement", "/id/Ritaharju_POS39_lighting", "/attributes/"];
 
@@ -387,15 +390,15 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				}
 				if (nameBtn === "Talvikangas") {
 					var graphData = [];
-					graphData.push([temperatureData, rooms, "Temp (°C)"])
-					graphData.push([carbonDioxideData, rooms, "CO (ppm)"])
-					graphData.push([soundAvgData, rooms, "SoundAvg(db?)"])
-					graphData.push([soundPeakData, rooms, "SoundPeak(db?)"])
-					graphData.push([humidityData, rooms, "Humi (%)"])
-					graphData.push([vocData, rooms, "VOC (ppb?)"])
+					graphData.push([temperatureData, rooms, "Temp (°C)"]);
+					graphData.push([carbonDioxideData, rooms, "CO (ppm)"]);
+					graphData.push([soundAvgData, rooms, "SoundAvg(db?)"]);
+					graphData.push([soundPeakData, rooms, "SoundPeak(db?)"]);
+					graphData.push([humidityData, rooms, "Humi (%)"]);
+					graphData.push([vocData, rooms, "VOC (ppb?)"]);
 					sendGraph(graphData, ["Talvikangas: Most recent values",
 						`${temperatureData.filter(Boolean).length} temperature values, ${carbonDioxideData.filter(Boolean).length} CO values, ${soundAvgData.filter(Boolean).length} SoundAvg values,
-						 ${soundPeakData.filter(Boolean).length} SoundPeak values, ${humidityData.filter(Boolean).length} Humidity values, ${vocData.filter(Boolean).length} VOC values`, "", "Y axis"])
+						 ${soundPeakData.filter(Boolean).length} SoundPeak values, ${humidityData.filter(Boolean).length} Humidity values, ${vocData.filter(Boolean).length} VOC values`, "", "Y axis"]);
 				}
 			}
 
@@ -413,6 +416,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		}
 	}
 	else if(classBtn === "buttonGraph_tal") {
+		// Button for each room which collects the defined data from room and shows it in graph
 		btn.onclick = async function(){
 			var aggrBool = false;
 			if(!onOffActivate) {
@@ -501,9 +505,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	}
 	// buttons for each Siptronix alerts
 	else if(classBtn == "buttonSearch_sip") {
-		// classBtn buttonGraph_sip handles siptronix data and draws graphs based on it
 		btn.onclick = async function() {
-			var alertDate = new Date(initDate)
+			var alertDate = new Date(nameBtn.slice(-20))
 			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(30));
 			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(30));
 			var btnList = [];
@@ -571,6 +574,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 
 		}
 	} else if (classBtn === "buttonGraph_sip") {
+		// classBtn buttonGraph_sip handles siptronix data and draws graphs based on it
 		btn.onclick = async function() {
 			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 			var measData = [[ [], [], [] ]];
@@ -646,6 +650,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 			}
 		}
 	} else if (classBtn === "buttonGraph_aqva") {
+		// Draws aqvaio data in graph
 		btn.onclick = async function() {
 			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
 			var dates = [];
