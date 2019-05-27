@@ -17,6 +17,5 @@ A tutorial for widget development can bee seen here: https://github.com/pokkonen
 The Wirecloud mashup consists of three widgets. Browsermain(or WidgetMain) is the main widget which is the main operator in this application.
 Input widget is a support widget for Browsermain and allows the user to modify the search by for example choosing the search method, timeperiod or 
 dates for each search. Highcharts widget is the graph widget which visualizes the data which Browsermain has retrieved from server.
-https://user-images.githubusercontent.com/14833656/58404833-bac8f200-806e-11e9-969b-f425a01a10d7.PNG
 
-![wirecloud_pic]
+![wirecloud_pic](https://user-images.githubusercontent.com/14833656/58404833-bac8f200-806e-11e9-969b-f425a01a10d7.PNG)
