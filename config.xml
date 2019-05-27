@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <widget xmlns="http://wirecloud.conwet.fi.upm.es/ns/macdescription/1" vendor="aui"
-        name="BROWSERMAIN" version="0.2.6">
+        name="BROWSERMAIN" version="0.2.8">
     <details>
         <title>BROWSERMAIN</title>
         <email>auistola@student.oulu.fi</email>
-        <image>images/catalogue.png</image>
+        <image>images/browsermain.PNG</image>
         <description>Searched JSON dumps from specific server</description>
         <longdescription>DESCRIPTION.md</longdescription>
         <authors>Anssi Uistola, Pekka Okkonen</authors>

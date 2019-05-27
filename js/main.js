@@ -506,9 +506,12 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	// buttons for each Siptronix alerts
 	else if(classBtn == "buttonSearch_sip") {
 		btn.onclick = async function() {
-			var alertDate = new Date(nameBtn.slice(-20))
+			var alertDate = new Date(nameBtn.slice(-20));
+			console.log(alertDate)
 			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(30));
+			console.log(alertDate)
 			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(30));
+			console.log(alertDate)
 			var btnList = [];
 			if(!onOffActivate) {
 				var graphsList = [];
