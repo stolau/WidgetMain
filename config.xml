@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<widget xmlns="http://wirecloud.conwet.fi.upm.es/ns/macdescription/1" vendor="aui"
+        name="BROWSERMAIN" version="0.2.8">
+    <details>
+        <title>BROWSERMAIN</title>
+        <email>auistola@student.oulu.fi</email>
+        <image>images/browsermain.PNG</image>
+        <description>Searched JSON dumps from specific server</description>
+        <longdescription>DESCRIPTION.md</longdescription>
+        <authors>Anssi Uistola, Pekka Okkonen</authors>
+        <homepage>https://github.com/stolau/widgetBrowser</homepage>
+        <license>Apache License 2.0</license>
+        <licenseurl>http://www.apache.org/licenses/LICENSE-2.0.html</licenseurl>
+        <doc>doc/userguide.md</doc>
+        <changelog>doc/changelog.md</changelog>
+    </details>
+
+
+    <preferences>
+        <preference name="apiKey" type="text" label="Server API key" description="APIKEY of the Orion Context Broker to use for retrieving entity information" default="{SECRET_API_KEY}"/>
+        <preference name="url" type="text" label="Server URL" description="URL of the Orion Context Broker to use for retrieving entity information" default="http://pan0107.panoulu.net"/>
+		<preference name="talService" type="text" label="Service paths" description="Service paths" default="tal"/>
+		<preference name="talServicePath" type="text" label="Service paths" description="Service paths" default=""/>
+		<preference name="test" type="list" label="list test" description="list test" default="">
+			<option value="test1" label="dedee"/>
+			<option value="test2" label="dadaa"/>
+			</preference>
+
+    </preferences>
+
+    <wiring>
+        <inputendpoint
+                name="AggrMethod"
+                label="AggrMethod"
+                type="text" />
+        <inputendpoint
+                name="AggrPeriod"
+                label="AggrPeriod"
+                type="text" />
+        <inputendpoint
+                name="Dates"
+                label="Dates"
+                type="text" />
+        <inputendpoint
+                name="nValue"
+                label="nValue"
+                type="text"
+                friendcode="Input" />
+        <inputendpoint
+                name="Minutes"
+                label="Minutes"
+                type="text" />
+        <outputendpoint
+                name="Graph"
+                label="Graph"
+                type="text"/>
+
+    </wiring>
+
+    <contents src="index.html" useplatformstyle="true"/>
+    <rendering height="300px" width="33%"/>
+</widget>
