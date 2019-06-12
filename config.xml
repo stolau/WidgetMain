@@ -16,7 +16,7 @@
 
 
     <preferences>
-        <preference name="apiKey" type="text" label="Server API key" description="APIKEY of the Orion Context Broker to use for retrieving entity information" default="pfzGgAJEB0qxPPzk0LTVJstcAfZv3YmN"/>
+        <preference name="apiKey" type="text" label="Server API key" description="APIKEY of the Orion Context Broker to use for retrieving entity information" default="{SECRET_API_KEY}"/>
         <preference name="url" type="text" label="Server URL" description="URL of the Orion Context Broker to use for retrieving entity information" default="http://pan0107.panoulu.net"/>
 		<preference name="talService" type="text" label="Service paths" description="Service paths" default="tal"/>
 		<preference name="talServicePath" type="text" label="Service paths" description="Service paths" default=""/>
@@ -53,6 +53,10 @@
                 name="Graph"
                 label="Graph"
                 type="text"/>
+<<<<<<< HEAD
+=======
+
+>>>>>>> refs/remotes/origin/master
     </wiring>
 
     <contents src="index.html" useplatformstyle="true"/>
