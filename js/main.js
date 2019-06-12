@@ -39,7 +39,7 @@ const graphColor = [
     "#7CFC00", "#00FFFF", "#00008B", "#FFFF00", "#008000", "#800080", "#00FF00",
     "#0000FF", "#000000", "#000080", "#7CFC00", "#E0E0E0", "#D2D2D2" ];
 
-function sendGraph(valueList, titles) {
+function sendGraph(valueList, titles, update) {
 	// Function gets tempList and name outputs graph to Highcharts
 	// Connect Graph to Highcharts Options in wiring mode.
 
@@ -61,20 +61,16 @@ function sendGraph(valueList, titles) {
 		});
 	}
 
-	var graphData = {
-		"title" : { "text" : titles[0], "x": -20 },
-		"subtitle": { "text" : titles[1], "x": -20},
-		"xAxis": { "categories": valueList[0][1],
-			"plotLines": titles[2]
-		},
-		"yAxis": { "title" : { "text": titles[3] },
-		"plotLines": [{ "value": 0, "width": 2, "color": "#808080" }] },
-		"tooltip": { "valueSuffix": "" },
-		"legend": { "layout": "vertical", "align": "right", "verticalAlign": "middle", "borderWidth": 0 },
-		"series":
-			compValueList,
-	}
-	MashupPlatform.wiring.pushEvent("Graph", graphData);
+	console.log(compValueList)
+
+	console.log(titles)
+
+	MashupPlatform.wiring.pushEvent("Graph", {
+		titles: titles,
+		categories: valueList,
+		data: compValueList,
+		update: update,
+	});
 
 }
 
@@ -196,6 +192,50 @@ function createNewPage(btnList) {
 	}
 }
 
+/* New stuff */
+
+const sleep = (milliseconds) => {
+	return new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+var runTime = 0;
+
+async function sendRequest(path, service, url, tempList, timeList, stop) {
+		console.log(path)
+		console.log(service)
+		console.log(url)
+		console.log(tempList)
+		console.log(timeList)
+		var headers = await getHeader(path, service);
+		var response = await browser(url, headers);
+		// console.log(response);
+		console.log(runTime)
+
+		tempList.push(response[1].rio225_t.value)
+		timeList.push(response[1].rio225_t.metadata.TimeInstant.value);
+		// console.log(tempList);
+		// console.log(timeList);
+
+		if (runTime === 0) {
+			sendGraph([[tempList, timeList, ["Current [graph name]"]]], ["Main Title", "Current measurements", "", "Y-axis title"])
+		} else {
+			sendGraph([[tempList, timeList, ["Current [graph name]"]]], ["Main Title", "Current measurements", "", "Y-axis title"], true)
+		}
+
+		if (runTime % 10 === 0) {
+			sleep(10000).then(() => {
+				runTime += 10;
+				sendRequest(path, service, url, tempList, timeList);
+				console.log(`Runtime: ${runTime} seconds`)
+			})
+		} else {
+			console.log("stopped")
+		}
+
+}
+
+/* New stuff */
+
 function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 {
 	// Creates new button which contains all the information required to make requestHeaders
@@ -224,7 +264,8 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	if(classBtn === "buttonSearch") {
 		// Search is meant to indicate that button will not draw graphs, but make searches further for specific data
 		btn.onclick =  async function(){
-			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+			// MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+			MashupPlatform.wiring.pushEvent("Graph", {titles: ["LOADING... " + nameBtn, "", "", ""], categories: [[], []], data: [], update: []});
 			var headers = await getHeader(servicePath, service);
 			var response = await browser(url, headers);
 			var btnList = [];
@@ -266,6 +307,12 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				graphContainer.graphList = [];
 				graphContainer.graphList.push(waterList, tempList);
 				sendGraph(graphContainer.graphList, ["Aqva.io", "Last " + waterList.length + " measurements", "", "Water reading and temperature"]);
+			} else if (idBtn === "testi") {
+				var tempList = [];
+				var timeList = [];
+				sendRequest('/f/2/225', service, url, tempList, timeList)
+				var stopBtn = createButton("Stop searching", "", "stop", "", "");
+				btnList.push(stopBtn)
 			} else {
 				for(var i = 0; i < response.length; i ++)
 				{
@@ -380,7 +427,6 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							bulbsList[d][1].push(i);
 						}
 						// TO-DO: Create buttons for all individual Alerts
-						console.log(response[i]["dateIssued"]["value"])
 						initDate = response[i]["dateIssued"]["value"];
 						var idsBtnList = ["/type/3PhaseACMeasurement", "/id/Ritaharju_POS39_lighting", "/attributes/"];
 
@@ -420,7 +466,12 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 		btn.onclick = async function(){
 			var aggrBool = false;
 			if(!onOffActivate) {
-				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+				MashupPlatform.wiring.pushEvent("Graph", {
+					titles: ["LOADING... " + nameBtn, "", "", ""],
+					categories: [],
+					data: [],
+					update: [],
+				});
 				// Pushes graph to list of graphs
 				// url = " https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities/type/" + "AirQualityObserved" + "/id/" + idBtn + "/attributes/tk11te22?lastN=50";
 				var graphsList = [];
@@ -507,17 +558,19 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	else if(classBtn == "buttonSearch_sip") {
 		btn.onclick = async function() {
 			var alertDate = new Date(nameBtn.slice(-20));
-			console.log(alertDate)
 			var dateFrom = alertDate.setMinutes(alertDate.getMinutes() - parseInt(30));
-			console.log(alertDate)
 			var dateTo = alertDate.setMinutes(alertDate.getMinutes() + 2*parseInt(30));
-			console.log(alertDate)
 			var btnList = [];
 			if(!onOffActivate) {
 				var graphsList = [];
 				var sipSearchList = ["activePower", "apparentPower", "current", "frequency", "powerFactor", "reactivePower", "totalActiveEnergyImport", "totalActivePower", "totalApparentPower", "totalReactivePower", "voltage"];
 				dataCollection = [];
-				MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+				MashupPlatform.wiring.pushEvent("Graph", {
+					titles: ["LOADING... " + nameBtn, "", "", ""],
+					categories: [],
+					data: [],
+					update: [],
+				});
 				for(var c = 0; c < sipSearchList.length; c++) {
 					url = "https://cors-anywhere.herokuapp.com/pan0107.panoulu.net:8000/comet/STH/v1/contextEntities" + idBtn[0] + idBtn[1] + idBtn[2] + sipSearchList[c] + "?lastN=100&dateFrom=" + dateFrom + "&dateTo=" + dateTo;
 					var headers = await getHeader(servicePath, service);
@@ -579,7 +632,12 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	} else if (classBtn === "buttonGraph_sip") {
 		// classBtn buttonGraph_sip handles siptronix data and draws graphs based on it
 		btn.onclick = async function() {
-			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+			MashupPlatform.wiring.pushEvent("Graph", {
+				titles: ["LOADING... " + nameBtn, "", "", ""],
+				categories: [],
+				data: [],
+				update: [],
+			});
 			var measData = [[ [], [], [] ]];
 			var graphData = [];
 			var dataCollection2 = [];
@@ -655,7 +713,12 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 	} else if (classBtn === "buttonGraph_aqva") {
 		// Draws aqvaio data in graph
 		btn.onclick = async function() {
-			MashupPlatform.wiring.pushEvent("Graph", {"title": {"text": "LOADING... " + nameBtn, "x": -20}});
+			MashupPlatform.wiring.pushEvent("Graph", {
+				titles: ["LOADING... " + nameBtn, "", "", ""],
+				categories: [],
+				data: [],
+				update: [],
+			});
 			var dates = [];
 			var data = [];
 			var graphData = [[]];
@@ -676,7 +739,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				for (var i = 0; i < values.length; i++) {
 					var originDate = new Date(values[i]._id.origin);
 					var newDate;
-					dates.push(originDate.toISOString().substr(0,18));
+					dates.push(originDate.toISOString().substr(0,16));
 					for (var j = 0; j < values[i].points.length; j++) {
 						if (aggrPeriod === "second") {
 							newDate = originDate.setSeconds(originDate.getSeconds() + 1);
@@ -692,7 +755,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							newDate = originDate.setDate(originDate.getDate() + 1);
 						}
 						var formatDate = new Date(newDate);
-						dates.push(formatDate.toISOString().substr(0,19));
+						dates.push(formatDate.toISOString().substr(0,16));
 						if (aggrMethod === undefined) {
 							data.push(parseInt(values[i].points[j]["max"]));
 						} else {
@@ -730,7 +793,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				for (var i = 0; i < values.length; i++) {
 					var originDate = new Date(values[i]._id.origin);
 					var newDate;
-					dates.push(originDate.toISOString().substr(0,18));
+					dates.push(originDate.toISOString().substr(0,16));
 					for (var j = 0; j < values[i].points.length; j++) {
 						if (aggrPeriod === "second") {
 							newDate = originDate.setSeconds(originDate.getSeconds() + 1);
@@ -746,7 +809,7 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 							newDate = originDate.setDate(originDate.getDate() + 1);
 						}
 						var formatDate = new Date(newDate);
-						dates.push(formatDate.toISOString().substr(0,19));
+						dates.push(formatDate.toISOString().substr(0,16));
 						if (aggrMethod === undefined) {
 							data.push(parseInt(values[i].points[j]["max"]));
 						} else {
@@ -769,6 +832,27 @@ function createButton(nameBtn, idBtn, classBtn, servicePath, service)
 				console.log(data)
 			}
 		}
+	} else if (classBtn === 'stop') {
+		var btnList = [];
+		btn.onclick = async function() {
+			runTime += 1;
+			console.log("Stop button clicked")
+			var continueBtn = createButton("Continue search", "", "continue", "", "");
+			btnList.push(continueBtn)
+			createNewPage(btnList)
+		}
+	} else if (classBtn === 'continue') {
+		var btnList = [];
+		var tempList = [];
+		var timeList = [];
+		btn.onclick = async function() {
+			runTime += 9;
+			console.log("Continue button clicked")
+			sendRequest('/f/2/225', 'tal', url, tempList, timeList)
+			var stopBtn = createButton("Stop search", "", "stop", "", "");
+			btnList.push(stopBtn)
+			createNewPage(btnList)
+		}
 	}
 	return btn;
 }
@@ -777,7 +861,7 @@ function init()
 {
 	// Predefined values
 	var list = [["Talvikangas", "tal", "buttonSearch", "", "tal"], ["Siptronix", "siptronix", "buttonSearch", "", "siptronix"], ["Aqva.io", "aqvaio", "buttonSearch", "/oulu", "aqvaio"],
-                ["JAS partners", "jas_oulu", "buttonSearch", "", "jas_oulu"], ["Ymparistotalo", "ymp", "buttonSearch", "", "ymp"]];
+                ["JAS partners", "jas_oulu", "buttonSearch", "", "jas_oulu"], ["Ymparistotalo", "ymp", "buttonSearch", "", "ymp"], ["r225", "testi", "buttonSearch", "", "tal"]];
 	// Clears HTML and sets up "main page"
 	document.body.innerHTML = '';
 	// Initializes the widget
@@ -792,7 +876,8 @@ function init()
 	MashupPlatform.wiring.registerCallback('Dates', function(data) {inputDates=data; console.log(`dates: ${inputDates}`)});
     MashupPlatform.wiring.registerCallback('nValue', function(data2) {inputNValue=data2; console.log(`nvalue: ${inputNValue}`)});
 	MashupPlatform.wiring.registerCallback('Minutes', function(mins) {minutes=mins; console.log(`minutes: ${minutes}`)});
-	}
+}
+
 
 
 init();

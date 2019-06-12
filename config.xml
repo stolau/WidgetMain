@@ -1,8 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<widget xmlns="http://wirecloud.conwet.fi.upm.es/ns/macdescription/1" vendor="aui"
-        name="BROWSERMAIN" version="0.2.8">
+<widget xmlns="http://wirecloud.conwet.fi.upm.es/ns/macdescription/1" vendor="aui" name="Browsermain" version="0.3.1">
     <details>
-        <title>BROWSERMAIN</title>
+        <title>Browsermain</title>
         <email>auistola@student.oulu.fi</email>
         <image>images/browsermain.PNG</image>
         <description>Searched JSON dumps from specific server</description>
@@ -54,7 +53,6 @@
                 name="Graph"
                 label="Graph"
                 type="text"/>
-
     </wiring>
 
     <contents src="index.html" useplatformstyle="true"/>
